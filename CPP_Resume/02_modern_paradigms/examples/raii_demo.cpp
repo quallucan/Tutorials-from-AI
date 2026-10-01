@@ -2,11 +2,12 @@
  * @file raii_demo.cpp
  * @brief RAII 与资源管理示例
  * 
- * 编译：g++ -std=c++20 -Wall -o raii_demo raii_demo.cpp
+ * 编译：g++ -std=c++20 -Wall -pthread -o raii_demo raii_demo.cpp
  * 运行：./raii_demo
  */
 
 #include <iostream>
+#include <thread>
 #include <fstream>
 #include <memory>
 #include <string>

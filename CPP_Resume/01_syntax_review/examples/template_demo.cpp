@@ -7,7 +7,7 @@
  * - 类模板
  * - 模板特化
  * - 可变参数模板
- * - C++20 Concepts（如果编译器支持）
+ * - C++20 Concepts（本教程的基线特性）
  * 
  * 编译：g++ -std=c++20 -Wall -o template_demo template_demo.cpp
  * 运行：./template_demo
@@ -18,6 +18,7 @@
 #include <vector>
 #include <type_traits>
 #include <concepts>
+#include <limits>
 
 // ============================================================
 // 1. 函数模板基础
@@ -334,8 +335,6 @@ void demo_sfinae() {
 // 7. C++20 Concepts
 // ============================================================
 
-#if __cpp_concepts >= 201907L
-
 // 定义概念
 template<typename T>
 concept Numeric = std::is_arithmetic_v<T>;
@@ -378,16 +377,6 @@ void demo_concepts() {
     
     std::cout << std::endl;
 }
-
-#else
-
-void demo_concepts() {
-    std::cout << "=== C++20 Concepts ===" << std::endl;
-    std::cout << "  (编译器不支持 Concepts，请使用支持 C++20 的编译器)" << std::endl;
-    std::cout << std::endl;
-}
-
-#endif
 
 // ============================================================
 // 8. 类模板参数推断 (CTAD) - C++17

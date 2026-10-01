@@ -2,7 +2,7 @@
 
 ## 📖 本节概述
 
-错误处理是编程中的核心问题。C++ 提供了多种错误处理机制：返回值、异常、以及现代的 `std::optional` 和 `std::expected`。本节将探讨这些机制的使用场景和最佳实践。
+错误处理是编程中的核心问题。C++ 提供了多种错误处理机制：返回值、异常、`std::optional`，以及用 `std::variant` 表示值或错误的 Result。本节将探讨这些机制的使用场景和最佳实践。
 
 ---
 
@@ -15,7 +15,8 @@
 | 返回错误码 | C | 简单，但容易忽略 |
 | 异常 | C++98 | 强制处理，但有性能争议 |
 | `std::optional` | C++17 | 表示"可能没有值" |
-| `std::expected` | C++23 | 表示"值或错误" |
+| `std::variant` / Result | C++17 引入，C++20 可用 | 表示"值或错误" |
+| `std::expected` | C++23（延伸阅读） | 标准化的"值或错误"接口，不属于本教程基线 |
 
 ### 1.2 选择指南
 
@@ -27,7 +28,7 @@
         └─ 否 → 函数可能没有结果？
                 ├─ 是 → std::optional
                 └─ 否 → 需要返回错误信息？
-                        ├─ 是 → std::expected 或返回 pair
+                        ├─ 是 → 基于 std::variant 的 Result
                         └─ 否 → std::optional
 ```
 
@@ -279,122 +280,81 @@ std::optional<int> parse_int(const std::string& s);
 
 ---
 
-## 4. std::expected (C++23)
+## 4. C++20：用 std::variant 表示值或错误
 
-### 4.1 基本概念
+### 4.1 Result 类型
 
-`std::expected<T, E>` 要么包含 T 类型的值，要么包含 E 类型的错误：
+C++20 没有 `std::expected`。需要返回错误详情时，可以用 `std::variant<T, E>` 存储成功值或错误。下面的简化别名要求 T 与 E 不同；它不是完整的 expected 实现，不提供 `and_then` 等接口，通用 variant 还可能因异常进入无值状态。
 
 ```cpp
-#include <expected>  // C++23
+#include <climits>
+#include <stdexcept>
+#include <string>
+#include <variant>
 
-enum class ParseError {
-    InvalidFormat,
-    OutOfRange,
-    Empty
-};
+template<typename T, typename E>
+using Result = std::variant<T, E>;
 
-std::expected<int, ParseError> parse_int(const std::string& s) {
-    if (s.empty()) {
-        return std::unexpected(ParseError::Empty);
-    }
-    
+enum class ParseError { Empty, InvalidFormat, OutOfRange };
+
+Result<int, ParseError> parse_int(const std::string& s) {
+    if (s.empty()) return ParseError::Empty;
     try {
-        int value = std::stoi(s);
-        return value;  // 成功
+        std::size_t pos = 0;
+        long value = std::stol(s, &pos);
+        if (pos != s.size()) return ParseError::InvalidFormat;
+        if (value < INT_MIN || value > INT_MAX) return ParseError::OutOfRange;
+        return static_cast<int>(value);
     } catch (const std::invalid_argument&) {
-        return std::unexpected(ParseError::InvalidFormat);
+        return ParseError::InvalidFormat;
     } catch (const std::out_of_range&) {
-        return std::unexpected(ParseError::OutOfRange);
+        return ParseError::OutOfRange;
     }
 }
+```
 
-void demo() {
+`std::stol` 接受前导空白和正负号；检查 `pos` 可以拒绝 `"42xyz"` 这样的尾随内容。完整程序见 [error_demo.cpp](./examples/error_demo.cpp)。
+
+### 4.2 显式检查结果
+
+```cpp
+#include <iostream>
+
+void demo_result() {
     auto result = parse_int("42");
-    
-    if (result) {
-        std::cout << "Value: " << *result << std::endl;
+    if (const auto* value = std::get_if<int>(&result)) {
+        std::cout << "Value: " << *value << '\n';
     } else {
-        switch (result.error()) {
-            case ParseError::Empty:
-                std::cout << "Empty string" << std::endl;
-                break;
-            case ParseError::InvalidFormat:
-                std::cout << "Invalid format" << std::endl;
-                break;
-            case ParseError::OutOfRange:
-                std::cout << "Out of range" << std::endl;
-                break;
+        switch (std::get<ParseError>(result)) {
+            case ParseError::Empty: std::cout << "Empty string\n"; break;
+            case ParseError::InvalidFormat: std::cout << "Invalid format\n"; break;
+            case ParseError::OutOfRange: std::cout << "Out of range\n"; break;
         }
     }
 }
 ```
 
-### 4.2 expected 的操作
+`std::get_if` 在活动类型不匹配时返回空指针；`std::get` 则抛出 `std::bad_variant_access`。这个 Result 仅含 int 和枚举，两种类型都不会在构造或赋值时抛出异常。
+
+### 4.3 多步骤错误传播
 
 ```cpp
-std::expected<int, std::string> exp;
-
-// 创建
-std::expected<int, std::string> e1 = 42;                    // 有值
-std::expected<int, std::string> e2 = std::unexpected("error"); // 有错误
-
-// 检查
-if (exp) { }              // 有值
-if (exp.has_value()) { }  // 有值
-
-// 访问值
-int a = *exp;             // 不检查
-int b = exp.value();      // 检查，无值时抛出 std::bad_expected_access
-int c = exp.value_or(0);  // 无值时返回默认
-
-// 访问错误
-std::string err = exp.error();  // 获取错误
-```
-
-### 4.3 monadic 操作（C++23）
-
-```cpp
-// and_then：如果有值，应用函数
-// or_else：如果有错误，应用函数
-// transform：转换值
-// transform_error：转换错误
-
-std::expected<int, std::string> get_number();
-std::expected<int, std::string> square(int x);
-
-auto result = get_number()
-    .and_then([](int x) { return square(x); })
-    .transform([](int x) { return x + 1; })
-    .or_else([](const std::string& err) {
-        std::cerr << err << std::endl;
-        return std::expected<int, std::string>(0);
-    });
-```
-
-### 4.4 C++23 之前的替代方案
-
-```cpp
-// 使用 std::variant
-template<typename T, typename E>
-using Result = std::variant<T, E>;
-
-Result<int, std::string> parse_int(const std::string& s) {
-    try {
-        return std::stoi(s);
-    } catch (...) {
-        return std::string("parse error");
+Result<int, ParseError> parse_nonnegative(const std::string& s) {
+    auto parsed = parse_int(s);
+    if (const auto* error = std::get_if<ParseError>(&parsed)) {
+        return *error;
     }
+    const int value = std::get<int>(parsed);
+    if (value < 0) return ParseError::OutOfRange;
+    return value;
 }
-
-// 使用 pair
-std::pair<bool, int> parse_int(const std::string& s);
-
-// 使用输出参数
-bool parse_int(const std::string& s, int& out);
-
-// 第三方库：tl::expected, boost::outcome
 ```
+
+先处理失败分支，再执行下一步，适用于 C++20 中的多步骤操作。
+
+### 4.4 延伸阅读：C++23 std::expected
+
+C++23 在 `<expected>` 中提供 `std::expected<T, E>`、`std::unexpected` 及 `and_then`、`transform` 等组合操作。它们不是 C++20 标准库的一部分，本教程的可编译示例与练习均不依赖它们。`std::optional` 的 `and_then`、`transform`、`or_else` 同样属于 C++23，C++20 中使用普通条件分支。
 
 ---
 
@@ -488,8 +448,8 @@ void parse_config(const std::string& path) {
 std::optional<User> find_user(int id);
 // 用户不存在是正常情况，不是错误
 
-// 使用 expected：需要返回错误信息
-std::expected<File, FileError> open_file(const std::string& path);
+// 使用第 4 节的 Result：需要返回错误信息
+Result<File, FileError> open_file(const std::string& path);
 // 文件打开可能失败，需要知道原因
 
 // 使用 error_code：与 C 接口或系统调用配合
@@ -564,18 +524,12 @@ std::optional<User> find_user(int id) {
     return std::nullopt;  // 没找到是正常情况
 }
 
-// 结合 expected 和 optional
-std::expected<std::optional<User>, DatabaseError> 
-find_user_in_database(int id) {
-    try {
-        auto result = db.query(id);
-        if (result.empty()) {
-            return std::nullopt;  // 用户不存在
-        }
-        return User(result);  // 找到用户
-    } catch (const DatabaseException& e) {
-        return std::unexpected(DatabaseError::ConnectionFailed);
-    }
+// 结合 Result 和 optional：空输入表示“未提供”，非空但无效表示错误
+Result<std::optional<int>, ParseError> parse_optional_int(const std::string& s) {
+    if (s.empty()) return std::optional<int>{};
+    auto result = parse_int(s);
+    if (const auto* error = std::get_if<ParseError>(&result)) return *error;
+    return std::optional<int>{std::get<int>(result)};
 }
 ```
 
@@ -587,7 +541,7 @@ find_user_in_database(int id) {
 |------|------|------|----------|
 | 异常 | 强制处理、可跨层传播 | 性能、控制流复杂 | 真正的异常情况 |
 | optional | 简单、类型安全 | 不携带错误信息 | 结果可能不存在 |
-| expected | 携带错误信息、类型安全 | C++23 | 需要错误详情 |
+| variant / Result | 携带错误信息、类型安全 | 需自行设计接口和传播逻辑 | C++20 中需要错误详情 |
 | error_code | 轻量、无异常 | 容易忽略 | 系统调用、C 接口 |
 
 ---
@@ -601,10 +555,10 @@ find_user_in_database(int id) {
 使用 `std::optional` 实现一个配置解析器，处理可选的配置项。
 
 ### 练习3：实现简单的 Result 类型
-在 C++17 中使用 `std::variant` 实现类似 `std::expected` 的 Result 类型。
+在 C++20 中使用 `std::variant` 封装 Result 类型，区分成功值与错误，并测试空输入、格式错误和越界。
 
 ### 练习4：错误处理链
-使用 optional 或 expected 实现一个多步骤操作的错误处理链。
+使用普通条件分支组合 optional 或 Result，实现一个多步骤操作的错误处理链。
 
 ---
 
@@ -612,7 +566,7 @@ find_user_in_database(int id) {
 
 1. **异常用于真正的异常情况**：罕见且严重的错误
 2. **optional 用于"可能没有"**：查找未找到、可选参数
-3. **expected 用于"可能失败"**：需要知道失败原因
+3. **Result 用于"可能失败"**：C++20 中用 variant 保存错误详情；expected 是 C++23 延伸内容
 4. **使用 RAII 保证异常安全**
 5. **析构函数不应抛出异常**：标记为 noexcept
 6. **按 const 引用捕获异常**

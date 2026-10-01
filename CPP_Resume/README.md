@@ -4,8 +4,10 @@
 
 本教程专为有 C++ 基础但长期未接触代码的开发者设计，旨在帮助你：
 
+**内容与示例统一以 C++20 为基线。** C++11/14/17 标注用于说明特性的引入版本；学习和编译时均使用 C++20。C++23 内容仅作为明确标注的延伸阅读，不是本教程的依赖。
+
 - 🔄 **回顾核心语法**：快速恢复 C++ 编程手感
-- 🚀 **学习现代特性**：掌握 C++11/14/17/20 的关键新特性
+- 🚀 **学习现代特性**：掌握 C++20 的 Concepts、Ranges、编译期计算和并发工具，理解 C++11/14/17 的演进
 - 🎯 **理解编程范式**：深入理解 RAII、智能指针、移动语义等现代编程范式
 - 🧮 **算法设计入门**：建立基础算法设计与实现能力
 
@@ -71,17 +73,44 @@
 ## 🛠️ 环境要求
 
 ### 编译器
-- **推荐**：GCC 11+ 或 Clang 14+（完整支持 C++20）
-- **最低**：GCC 9 或 Clang 10（支持 C++17）
+
+需要同时支持所用 C++20 特性的编译器和标准库，尤其是 `<format>`、`<ranges>`、`<coroutine>` 和 `std::jthread`。建议使用以下工具链：
+
+| 平台/工具链 | 建议配置 |
+|------------|----------|
+| GCC | GCC 13+，配套 libstdc++ 13+ |
+| Clang（Linux） | Clang 18+，搭配 libstdc++ 13+ |
+| MSVC（Windows） | Visual Studio 2022 17.10+，安装“使用 C++ 的桌面开发”及配套标准库 |
+
+这不是对完整 C++20 实现的承诺。Clang 的语言版本与标准库版本是两回事；使用 libc++ 或 Apple Clang 时也需确认所需库特性。CMake 配置会检查 `std::format` 和 `std::jthread`，其余示例在构建时检查，不会静默降级或跳过特性。具体支持情况可查 [libstdc++ 官方状态表](https://gcc.gnu.org/onlinedocs/libstdc++/manual/status.html#status.iso.2020)、[libc++ 官方状态表](https://libcxx.llvm.org/Status/Cxx20.html)和 [MSVC 官方一致性文档](https://learn.microsoft.com/en-us/cpp/overview/visual-cpp-language-conformance)。
 
 ### 编译命令
+
 ```bash
-# 编译单个文件
+# GCC / Clang：编译单个文件
 g++ -std=c++20 -Wall -Wextra -o output example.cpp
 
-# 如果不支持 C++20，使用 C++17
-g++ -std=c++17 -Wall -Wextra -o output example.cpp
+# 使用线程的示例（thread_demo.cpp、raii_demo.cpp）还需 -pthread
+g++ -std=c++20 -Wall -Wextra -pthread -o thread_demo thread_demo.cpp
 ```
+
+Windows 可在 Visual Studio 的开发者命令提示符中编译：
+
+```bat
+cl /std:c++20 /EHsc /W4 /permissive- /utf-8 /Zc:__cplusplus example.cpp /Fe:output.exe
+```
+
+### 构建并验证全部示例
+
+项目提供 CMake 3.21+ 配置，从项目根目录执行：
+
+```bash
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug
+cmake --build build --config Debug --parallel
+ctest --test-dir build -C Debug --output-on-failure
+```
+
+每个 `.cpp` 对应一个独立程序；CTest 会在构建目录内分别运行它们。Debug 构建启用示例里的运行期断言；编译期断言始终生效。模块章节是多文件语法介绍，需要工具链专用构建流程，不包含在这些单文件示例中。
 
 ### 开发环境（建议）
 - **编辑器**：VSCode + C/C++ 扩展 或 CLion
@@ -95,8 +124,8 @@ g++ -std=c++17 -Wall -Wextra -o output example.cpp
 适合基础较好、时间有限的学习者：
 
 1. 第一章快速浏览，重点看 1.6 现代特性总览
-2. 第二章重点学习 RAII、智能指针、移动语义、Lambda
-3. 第三章学习复杂度分析和 STL 算法库
+2. 第二章重点学习 RAII、智能指针、移动语义、模板 Lambda、`consteval` 和 `std::jthread`
+3. 第三章学习复杂度分析、STL 算法库和 Ranges
 
 ### 📖 完整学习路线（约 6-8 周）
 适合系统性学习的开发者：
@@ -142,6 +171,7 @@ g++ -std=c++17 -Wall -Wextra -o output example.cpp
 CPP_Resume/
 ├── README.md                 # 本文件
 ├── DESIGN.md                 # 设计文档
+├── CMakeLists.txt            # C++20 构建与 CTest 验证
 │
 ├── 01_syntax_review/         # 第一章：语法回顾
 │   ├── README.md             # 章节导读
@@ -156,7 +186,9 @@ CPP_Resume/
 │       ├── pointer_demo.cpp
 │       ├── class_demo.cpp
 │       ├── template_demo.cpp
-│       └── stl_demo.cpp
+│       ├── stl_demo.cpp
+│       ├── modern_features_demo.cpp # span、比较、format 等
+│       └── coroutine_demo.cpp # 自定义协程生成器
 │
 ├── 02_modern_paradigms/      # 第二章：现代编程范式
 │   ├── README.md             # 章节导读

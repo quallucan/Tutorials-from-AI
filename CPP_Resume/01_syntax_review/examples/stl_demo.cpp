@@ -177,11 +177,9 @@ void demo_map() {
     }
     
     // C++20 contains
-    #if __cplusplus >= 202002L
     if (scores.contains("Charlie")) {
         std::cout << "  Charlie 存在于 map 中" << std::endl;
     }
-    #endif
     
     // 遍历 (C++17 结构化绑定)
     std::cout << "  所有分数:" << std::endl;
@@ -417,31 +415,18 @@ void demo_modern_stl() {
     }
     
     // C++20: erase_if (统一的删除方式)
-    #if __cplusplus >= 202002L
     std::erase_if(v, [](int x) { return x % 2 == 0; });
     std::cout << "  删除偶数后: ";
     for (const auto& x : v) {
         std::cout << x << " ";
     }
     std::cout << std::endl;
-    #else
-    // C++17 及之前: erase-remove idiom
-    v.erase(std::remove_if(v.begin(), v.end(), 
-            [](int x) { return x % 2 == 0; }), v.end());
-    std::cout << "  删除偶数后 (erase-remove): ";
-    for (const auto& x : v) {
-        std::cout << x << " ";
-    }
-    std::cout << std::endl;
-    #endif
     
     // C++20: contains
-    #if __cplusplus >= 202002L
     std::set<int> s = {1, 2, 3};
     if (s.contains(2)) {
         std::cout << "  set 包含 2" << std::endl;
     }
-    #endif
     
     std::cout << std::endl;
 }

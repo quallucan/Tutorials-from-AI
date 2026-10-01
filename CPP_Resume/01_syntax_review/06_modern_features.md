@@ -6,6 +6,19 @@
 
 ---
 
+本教程统一按 **C++20** 编译。下文按引入版本回顾演进，旧版本标题不表示要切换编译标准。Concepts、Ranges、`span`、`format`、`jthread` 是本教程可直接使用的工具。
+
+| 实践主题 | 完整示例 |
+|----------|----------|
+| Concepts / requires | [template_demo.cpp](./examples/template_demo.cpp) |
+| span、三路比较、指定初始化、format、source_location | [modern_features_demo.cpp](./examples/modern_features_demo.cpp) |
+| 协程帧与 co_yield | [coroutine_demo.cpp](./examples/coroutine_demo.cpp) |
+| 模板 Lambda | [lambda_demo.cpp](../02_modern_paradigms/examples/lambda_demo.cpp) |
+| consteval、constinit、编译期 vector 与排序 | [constexpr_demo.cpp](../02_modern_paradigms/examples/constexpr_demo.cpp) |
+| jthread、停止请求和同步工具 | [thread_demo.cpp](../02_modern_paradigms/examples/thread_demo.cpp) |
+| Ranges、视图、投影 | [stl_algo_demo.cpp](../03_algorithm_design/examples/stl_algo_demo.cpp) |
+
+
 ## 1. C++11 - 现代 C++ 的起点
 
 C++11 是一个里程碑式的版本，引入了大量改变语言面貌的特性。
@@ -493,6 +506,7 @@ C++20 是自 C++11 以来最大的更新，引入了四大特性：Concepts、Ra
 
 ```cpp
 #include <concepts>
+#include <type_traits>
 
 // 定义概念
 template<typename T>
@@ -526,6 +540,7 @@ auto add3(Numeric auto a, Numeric auto b) {
 
 ```cpp
 #include <ranges>
+#include <iostream>
 #include <vector>
 
 std::vector<int> nums = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
@@ -552,28 +567,29 @@ for (int x : result2) {
 
 ### 4.3 协程 (Coroutines)
 
-```cpp
-#include <coroutine>
+C++20 提供 `co_await`、`co_yield`、`co_return` 及 `<coroutine>` 基础设施，但没有现成的标准 `generator` 或 `task` 类型。协程也不会自动创建线程或调度异步任务。
 
-// 生成器示例（需要自定义 promise_type）
-generator<int> range(int start, int end) {
-    for (int i = start; i < end; ++i) {
-        co_yield i;  // 产出值并暂停
+下面片段使用本项目自定义的 `IntGenerator`，需结合 [coroutine_demo.cpp](./examples/coroutine_demo.cpp) 中的完整定义阅读：
+
+```cpp
+IntGenerator range(int first, int last) {
+    for (int i = first; i < last; ++i) {
+        co_yield i;  // 保存状态，暂停到调用者下一次恢复
     }
 }
 
-for (int x : range(1, 5)) {
-    std::cout << x << " ";  // 1 2 3 4
-}
-
-// 异步操作
-task<int> async_compute() {
-    int result = co_await some_async_operation();
-    co_return result;
+void demo_coroutine() {
+    auto values = range(1, 5);
+    int value = 0;
+    while (values.next(value)) std::cout << value << ' ';  // 1 2 3 4
 }
 ```
 
+返回类型的 `promise_type` 定义开始、产出、异常与结束行为；拥有协程句柄的对象必须管理协程帧的销毁。示例采用不可复制、可移动的 RAII 包装，在结束或提前退出时释放帧，并将协程中的异常传播给调用者。`std::generator` 是 C++23 的内容，不属于这里的基线。
+
 ### 4.4 Modules（模块）
+
+以下是两个文件的语法介绍，不能拼成一个 `.cpp` 编译。模块的扫描、接口编译及链接命令依赖编译器和构建系统；它不纳入本教程的单文件 CMake 示例。`import std;` 不是 C++20 标准库的要求，普通头文件仍使用 `#include`。
 
 ```cpp
 // math.ixx（模块接口）
@@ -587,7 +603,8 @@ export int multiply(int a, int b) {
     return a * b;
 }
 
-// main.cpp
+// main.cpp（独立翻译单元）
+#include <iostream>
 import math;
 
 int main() {
@@ -595,7 +612,7 @@ int main() {
     return 0;
 }
 
-// 优势：编译更快，没有头文件问题
+// 模块提供显式导出边界；构建时间收益取决于工具链与项目组织
 ```
 
 ### 4.5 三路比较运算符 (<=>)
@@ -606,7 +623,7 @@ int main() {
 struct Point {
     int x, y;
     
-    // 自动生成所有比较运算符
+    // 默认化 <=> 支持关系比较，并隐式声明默认化的 ==
     auto operator<=>(const Point&) const = default;
 };
 
@@ -619,10 +636,13 @@ if (p1 == p2) {  // 自动生成
 }
 ```
 
+这里是 `= default` 的规则；手写 `<=>` 的函数体不会自动获得 `==`，需要另行定义。比较按成员声明顺序进行；包含浮点成员时还要考虑 NaN 对应的无序结果。
+
 ### 4.6 std::format
 
 ```cpp
 #include <format>
+#include <string>
 
 std::string name = "Alice";
 int age = 30;
@@ -645,62 +665,54 @@ std::format("{:#x}", 255);     // "0xff"
 std::format("{:b}", 42);       // "101010"
 ```
 
-### 4.7 其他 C++20 特性
+### 4.7 编译期容器：临时分配，不保留动态存储
 
 ```cpp
-// constexpr 更强大
-constexpr std::vector<int> v = {1, 2, 3};  // constexpr 容器
-constexpr auto result = std::accumulate(v.begin(), v.end(), 0);
+#include <numeric>
+#include <vector>
 
-// contains 方法
-std::map<int, int> m = {{1, 1}};
-if (m.contains(1)) { /* ... */ }
+constexpr int sum_values() {
+    std::vector<int> values{1, 2, 3};
+    return std::accumulate(values.begin(), values.end(), 0);
+}  // 动态存储在本次常量求值结束前释放
+static_assert(sum_values() == 6);
+// constexpr std::vector<int> values{1, 2, 3};  // 错误：动态存储逃逸出常量求值
+```
 
-std::string s = "hello";
-if (s.starts_with("he")) { /* ... */ }
-if (s.ends_with("lo")) { /* ... */ }
+需要持久保存编译期序列时使用 `std::array`。`consteval` 强制立即调用产生常量表达式；`constinit` 要求静态或线程存储期对象常量初始化，但不使对象只读，也不自动使它可用于常量表达式。详见 [2.6 编译期计算](../02_modern_paradigms/06_constexpr_compile.md)。
 
-// std::span
-void process(std::span<int> data) {
-    for (int x : data) {
-        std::cout << x << " ";
-    }
+### 4.8 std::span：借用连续序列
+
+```cpp
+#include <iostream>
+#include <span>
+#include <vector>
+
+void print_values(std::span<const int> data) {
+    for (int x : data) std::cout << x << ' ';
 }
 
-int arr[] = {1, 2, 3, 4, 5};
-process(arr);           // 数组
-std::vector<int> v = {1, 2, 3};
-process(v);             // vector
-
-// std::source_location
-#include <source_location>
-void log(std::source_location loc = std::source_location::current()) {
-    std::cout << loc.file_name() << ":" << loc.line() << std::endl;
-}
-
-// [[likely]] 和 [[unlikely]]
-if (x > 0) [[likely]] {
-    // 更可能执行的分支
-} else [[unlikely]] {
-    // 不太可能执行的分支
-}
-
-// 初始化语句中的范围 for
-for (auto v = get_vector(); auto& x : v) {
-    // ...
-}
-
-// using enum
-enum class Color { Red, Green, Blue };
-void foo(Color c) {
-    using enum Color;
-    switch (c) {
-        case Red: break;   // 不需要 Color::Red
-        case Green: break;
-        case Blue: break;
-    }
+void demo_span() {
+    int array[]{1, 2, 3};
+    std::vector<int> values{4, 5, 6};
+    print_values(array);
+    print_values(values);
+    print_values(std::span{values}.first(2));
 }
 ```
+
+`span` 包含首地址和长度，不拥有数据，不延长底层对象的生命周期。`span<const int>` 限制通过该视图修改元素；`const span<int>` 仅限制视图本身，仍能修改元素。C++20 中 `operator[]` 不保证运行时边界检查，访问前要确保索引有效；容器重新分配后旧视图可能悬空。
+
+### 4.9 日常语法与库工具
+
+- `map`、`set` 及对应无序关联容器的 `contains`：检查键是否存在；不是所有容器都有该成员。
+- `std::erase` / `std::erase_if`：统一删除接口；关联容器按条件删除使用 `std::erase_if`。
+- `std::string::starts_with` / `ends_with`：前后缀判断；`std::string::contains` 属于 C++23。
+- 指定初始化：`Point{.x = 1, .y = 2}`，只用于聚合类型，顺序必须与成员声明一致。
+- `std::source_location`：通过默认参数记录调用位置，见配套示例。
+- `<bit>` 中的 `std::popcount`、`std::has_single_bit` 与 `<numbers>` 中的数学常量。
+- 范围 for 初始化语句：`for (auto values = make_values(); auto& x : values)`，让拥有数据的对象存活到循环结束。
+- `std::jthread` / `std::stop_token`：自动回收线程与协作式停止；`std::osyncstream` 避免多线程消息相互穿插，见 [2.8 并发编程](../02_modern_paradigms/08_concurrency_intro.md)。
 
 ---
 
@@ -735,7 +747,8 @@ void foo(Color c) {
 1. **立即开始使用**：auto、范围 for、智能指针、lambda
 2. **深入学习**：移动语义、RAII（见第二章）
 3. **提升效率**：string_view、optional、结构化绑定
-4. **前沿技术**：Concepts、Ranges（C++20）
+4. **C++20 日常实践**：Concepts、Ranges、span、format、consteval、jthread
+5. **进阶机制**：协程帧的生命周期和模块的构建边界
 
 ---
 

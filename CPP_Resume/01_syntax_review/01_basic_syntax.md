@@ -142,7 +142,7 @@ a <= b   // 小于等于
 a >= b   // 大于等于
 
 // C++20 三路比较运算符
-auto result = a <=> b;  // 返回 std::strong_ordering
+auto result = a <=> b;  // 整数比较返回 std::strong_ordering；浮点比较返回 std::partial_ordering
 ```
 
 ### 3.3 逻辑运算符
@@ -590,6 +590,7 @@ int main() {
 ```cpp
 #include <format>  // C++20
 #include <iostream>
+#include <string>
 
 int main() {
     std::string name = "Alice";
@@ -608,6 +609,19 @@ int main() {
     
     return 0;
 }
+```
+
+---
+
+### 7.4 C++20 的 UTF-8 字面量
+
+C++20 的 `u8"hello"` 使用 `char8_t`，不能再隐式当作 `const char*` 传给旧接口，也不能直接用 `std::cout` 输出。`std::u8string` 保存 UTF-8 码元；与接受 `char` 的接口交互时需要明确编码和转换方式。本教程的控制台示例使用普通字符串字面量，并在 MSVC 编译时启用 `/utf-8`。
+
+```cpp
+#include <string>
+
+std::u8string utf8 = u8"你好";
+// const char* text = u8"hello";  // C++20 中类型不匹配
 ```
 
 ---

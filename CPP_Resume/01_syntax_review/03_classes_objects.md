@@ -716,7 +716,7 @@ private:
 public:
     Version(int ma, int mi, int pa) : major_(ma), minor_(mi), patch_(pa) {}
     
-    // C++20：定义 <=> 自动生成 <, >, <=, >=, ==, !=
+    // C++20：默认化 <=> 支持关系比较，并隐式声明默认化的 ==
     auto operator<=>(const Version& other) const = default;
     
     // 或者手动实现

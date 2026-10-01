@@ -7,6 +7,8 @@
  */
 
 #include <iostream>
+#include <concepts>
+#include <set>
 #include <vector>
 #include <algorithm>
 #include <numeric>
@@ -307,6 +309,22 @@ void demo_capture_this() {
 }
 
 // ============================================================
+// 10. C++20：显式模板参数与无捕获 Lambda 的默认构造
+// ============================================================
+
+void demo_cpp20_lambda() {
+    std::cout << "\n=== C++20 模板 Lambda ===\n";
+    auto add_same_type = []<std::integral T>(T a, T b) { return a + b; };
+    std::cout << "同类型整数相加: " << add_same_type(2, 3) << '\n';
+    // add_same_type(2, 3.0);  // 约束要求整数，且两个参数推导为同一个 T
+
+    auto descending = [](int a, int b) { return a > b; };
+    std::set<int, decltype(descending)> values{1, 3, 2};
+    for (int value : values) std::cout << value << ' ';  // 3 2 1
+    std::cout << '\n';
+}
+
+// ============================================================
 // 主函数
 // ============================================================
 
@@ -324,6 +342,7 @@ int main() {
     demo_std_function();
     demo_higher_order();
     demo_capture_this();
+    demo_cpp20_lambda();
     
     std::cout << "\n========================================\n";
     std::cout << "            示例结束\n";

@@ -15,6 +15,13 @@
 #include <vector>
 #include <queue>
 #include <chrono>
+#include <barrier>
+#include <cassert>
+#include <latch>
+#include <semaphore>
+#include <stop_token>
+#include <string>
+#include <syncstream>
 
 // ============================================================
 // 1. 创建线程
@@ -54,15 +61,11 @@ void demo_create_threads() {
 // 2. 数据竞争问题
 // ============================================================
 
-int unsafe_counter = 0;
 int safe_counter = 0;
 std::mutex counter_mutex;
 
-void increment_unsafe(int iterations) {
-    for (int i = 0; i < iterations; ++i) {
-        ++unsafe_counter;  // 数据竞争！
-    }
-}
+// 反例（不执行）：两个线程同时 ++ 普通 int 会产生数据竞争和未定义行为。
+// 不能把一次运行的输出当作数据竞争的可靠演示。
 
 void increment_safe(int iterations) {
     for (int i = 0; i < iterations; ++i) {
@@ -76,13 +79,7 @@ void demo_data_race() {
     
     const int iterations = 100000;
     
-    // 不安全版本
-    unsafe_counter = 0;
-    std::thread t1(increment_unsafe, iterations);
-    std::thread t2(increment_unsafe, iterations);
-    t1.join();
-    t2.join();
-    std::cout << "不安全计数器 (期望 " << iterations * 2 << "): " << unsafe_counter << "\n";
+    std::cout << "未加锁的 ++counter 是未定义行为，反例仅作说明。\n";
     
     // 安全版本
     safe_counter = 0;
@@ -91,6 +88,7 @@ void demo_data_race() {
     t3.join();
     t4.join();
     std::cout << "安全计数器 (期望 " << iterations * 2 << "): " << safe_counter << "\n";
+    assert(safe_counter == iterations * 2);
 }
 
 // ============================================================
@@ -297,6 +295,7 @@ void demo_atomic() {
     t2.join();
     
     std::cout << "原子计数器 (期望 " << iterations * 2 << "): " << atomic_counter << "\n";
+    assert(atomic_counter == iterations * 2);
 }
 
 // ============================================================
@@ -308,6 +307,71 @@ void demo_hardware_concurrency() {
     
     unsigned int n = std::thread::hardware_concurrency();
     std::cout << "硬件并发线程数: " << n << "\n";
+}
+
+// ============================================================
+// 10. C++20：自动回收线程与协作式停止
+// ============================================================
+
+void demo_jthread_stop() {
+    std::cout << "\n=== C++20 jthread 与 stop_token ===\n";
+    std::mutex mutex;
+    std::condition_variable_any wakeup;
+    std::latch started{1};
+    bool observed_stop = false;
+    {
+        std::jthread worker([&](std::stop_token stop) {
+            std::unique_lock lock(mutex);
+            started.count_down();
+            // 带 stop_token 的等待可被停止请求唤醒；普通 condition_variable 不支持。
+            wakeup.wait(lock, stop, [] { return false; });
+            observed_stop = stop.stop_requested();
+            std::osyncstream(std::cout) << "工作线程收到停止请求\n";
+        });
+        started.wait();
+        worker.request_stop();  // 协作式请求，不是强制终止
+    }  // 析构时 request_stop + join；被引用的状态此时仍然存活
+    assert(observed_stop);  // join 之后读取，无数据竞争
+}
+
+// ============================================================
+// 11. C++20：latch、barrier、semaphore 与原子等待
+// ============================================================
+
+void demo_cpp20_synchronization() {
+    constexpr int worker_count = 3;
+    std::latch completed{worker_count};
+    std::barrier phase{worker_count};
+    std::binary_semaphore permit{1};
+    int total = 0;
+    {
+        std::vector<std::jthread> workers;
+        for (int i = 0; i < worker_count; ++i) {
+            workers.emplace_back([&] {
+                for (int round = 0; round < 2; ++round) {
+                    permit.acquire();
+                    ++total;  // 此处不会抛出异常，随后必定释放许可
+                    permit.release();
+                    phase.arrive_and_wait();  // 可重复使用的阶段屏障
+                }
+                completed.count_down();
+            });
+        }
+        completed.wait();  // 一次性等待所有工作完成
+    }  // 所有线程已 join，之后才销毁同步对象
+    assert(total == worker_count * 2);
+    std::cout << "两轮同步后的计数: " << total << '\n';
+
+    std::atomic<bool> published{false};
+    int answer = 0;
+    std::jthread publisher([&] {
+        answer = 42;
+        published.store(true, std::memory_order_release);
+        published.notify_one();
+    });
+    published.wait(false, std::memory_order_acquire);
+    assert(answer == 42);  // release/acquire 发布了非原子数据
+    std::cout << "原子等待收到的结果: " << answer << '\n';
 }
 
 // ============================================================
@@ -328,6 +392,8 @@ int main() {
     demo_promise();
     demo_atomic();
     demo_hardware_concurrency();
+    demo_jthread_stop();
+    demo_cpp20_synchronization();
     
     std::cout << "\n========================================\n";
     std::cout << "            示例结束\n";

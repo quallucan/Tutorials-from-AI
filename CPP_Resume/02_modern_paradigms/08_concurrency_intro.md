@@ -2,7 +2,7 @@
 
 ## 📖 本节概述
 
-并发编程是现代软件开发的重要主题。C++11 引入了标准的线程库，使得跨平台的多线程编程成为可能。本节将介绍线程、互斥锁、条件变量和异步任务的基础知识。
+并发编程是现代软件开发的重要主题。C++11 引入了标准的线程库，使得跨平台的多线程编程成为可能。本节以 C++20 为基线，介绍线程、互斥锁、条件变量、异步任务及新的同步工具。优先使用 `std::jthread` 管理线程生命周期；保留 `std::thread` 来解释 join/detach 和历史代码。
 
 ---
 
@@ -562,10 +562,15 @@ void spin_lock_example() {
 
 ## 7. C++20 新增特性
 
-### 7.1 std::jthread
+### 7.1 std::jthread 与协作式停止
+
+`std::jthread` 析构时，若线程仍可 join，会先发出停止请求再 join。停止是协作式的：任务必须检查 `std::stop_token` 或使用支持停止的等待；它不会强制中断阻塞 I/O，析构也可能等待很久。线程捕获的对象必须活到线程结束。
 
 ```cpp
 #include <thread>
+#include <stop_token>
+#include <chrono>
+#include <iostream>
 
 void demo_jthread() {
     // 自动 join
@@ -588,6 +593,26 @@ void demo_jthread() {
 }  // 自动 join
 ```
 
+带停止请求的等待示例（普通 `std::condition_variable` 没有这个重载）：
+
+```cpp
+#include <condition_variable>
+#include <mutex>
+#include <thread>
+#include <stop_token>
+
+void stoppable_wait() {
+    std::mutex mutex;
+    std::condition_variable_any cv;
+    // 状态先构造、worker 后构造，确保 worker 先析构并 join。
+    std::jthread worker([&](std::stop_token stop) {
+        std::unique_lock lock(mutex);
+        cv.wait(lock, stop, [] { return false; });
+    });
+    worker.request_stop();  // 即使请求发生在 wait 之前也有效
+}
+```
+
 ### 7.2 std::latch 和 std::barrier
 
 ```cpp
@@ -603,9 +628,9 @@ void demo_latch() {
         latch.count_down();
     };
     
-    std::thread t1(worker, 1);
-    std::thread t2(worker, 2);
-    std::thread t3(worker, 3);
+    std::jthread t1(worker, 1);
+    std::jthread t2(worker, 2);
+    std::jthread t3(worker, 3);
     
     latch.wait();  // 等待计数归零
     std::cout << "All workers done" << std::endl;
@@ -626,21 +651,21 @@ void demo_barrier() {
         }
     };
     
-    std::thread t1(worker, 1);
-    std::thread t2(worker, 2);
-    std::thread t3(worker, 3);
+    std::jthread t1(worker, 1);
+    std::jthread t2(worker, 2);
+    std::jthread t3(worker, 3);
     
     t1.join(); t2.join(); t3.join();
 }
 ```
 
-### 7.3 std::semaphore
+### 7.3 std::counting_semaphore 与 std::binary_semaphore
 
 ```cpp
 #include <semaphore>
 
 // 计数信号量
-std::counting_semaphore<10> sem(3);  // 初始计数 3，最大 10
+std::counting_semaphore<10> sem(3);  // 初始计数 3，模板参数要求实现至少支持最大值 10
 
 void demo_semaphore() {
     auto worker = [](int id) {
@@ -650,7 +675,7 @@ void demo_semaphore() {
         sem.release();  // 释放许可
     };
     
-    std::vector<std::thread> threads;
+    std::vector<std::jthread> threads;
     for (int i = 0; i < 10; ++i) {
         threads.emplace_back(worker, i);
     }
@@ -661,6 +686,32 @@ void demo_semaphore() {
 // 二元信号量（类似 mutex）
 std::binary_semaphore bsem(1);
 ```
+
+### 7.4 原子等待与同步输出
+
+C++20 的 `atomic::wait` / `notify_one` / `notify_all` 可以等待原子值发生变化，减少手写忙等循环。发布共享数据时仍需正确的内存顺序，通知本身不代替同步。
+
+```cpp
+#include <atomic>
+#include <cassert>
+#include <thread>
+
+void publish_result() {
+    std::atomic<bool> ready{false};
+    int result = 0;
+    std::jthread worker([&] {
+        result = 42;
+        ready.store(true, std::memory_order_release);
+        ready.notify_one();
+    });
+    ready.wait(false, std::memory_order_acquire);
+    assert(result == 42);
+}
+```
+
+通过 `std::osyncstream(std::cout) << "完整消息\n";` 输出时，同一个临时对象积累的消息会作为整体提交。所有向同一底层缓冲区写入的线程都应使用这种包装，才能保证消息不相互穿插；需要包含 `<syncstream>` 和 `<iostream>`。
+
+完整示例见 [thread_demo.cpp](./examples/thread_demo.cpp)，包含停止请求、一次性 latch、可重复 barrier、信号量和原子等待。数据竞争属于未定义行为，示例中的不加锁反例只作说明，不实际运行。
 
 ---
 
@@ -733,7 +784,7 @@ void good() {
 ## 📝 练习题
 
 ### 练习1：线程池
-实现一个简单的线程池，支持提交任务并获取结果。
+使用 `std::jthread` 实现一个简单线程池，支持提交任务、获取结果及协作式关闭；明确关闭时如何处理排队任务。
 
 ### 练习2：并发安全队列
 实现一个线程安全的队列，支持多生产者多消费者。
@@ -748,13 +799,13 @@ void good() {
 
 ## 💡 要点总结
 
-1. **std::thread**：创建和管理线程，必须 join 或 detach
+1. **优先使用 std::jthread**：自动发出停止请求并 join；std::thread 需要手动管理
 2. **std::mutex + lock_guard**：保护共享数据
 3. **std::unique_lock**：更灵活的锁管理
 4. **std::condition_variable**：线程间通信
 5. **std::async/future**：异步任务
-6. **std::atomic**：无锁原子操作
-7. **C++20 增强**：jthread、latch、barrier、semaphore
+6. **std::atomic**：原子操作不保证总是无锁，可用 is_lock_free 查询
+7. **C++20 同步工具**：stop_token、latch、barrier、信号量、atomic::wait 与 osyncstream
 8. **避免数据竞争和死锁**
 
 ---

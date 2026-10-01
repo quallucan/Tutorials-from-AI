@@ -504,8 +504,15 @@ void demo_heap() {
 
 ## 10. C++20 Ranges
 
+本教程以 C++20 为基线：接受整个范围的 `std::ranges` 算法、`std::views` 惰性适配器和投影是日常工具。前面的迭代器写法仍可使用，尤其适用于需要子区间或没有范围版本的算法。
+
 ```cpp
+#include <algorithm>
+#include <iostream>
+#include <iterator>
 #include <ranges>
+#include <string>
+#include <vector>
 
 void demo_ranges() {
     std::vector<int> v = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
@@ -532,6 +539,33 @@ void demo_ranges() {
 }
 ```
 
+### 10.1 视图的生命周期与实体化
+
+视图通常借用原容器，管道本身不会预先计算所有结果。保持底层容器存活，并避免使迭代器失效的修改；也不要通过修改元素破坏 `filter` 的筛选条件或依赖其缓存结果。
+
+```cpp
+std::vector<int> values{1, 2, 3, 4};
+auto squares = values
+    | std::views::filter([](int x) { return x % 2 == 0; })
+    | std::views::transform([](int x) { return x * x; });
+std::vector<int> saved;
+std::ranges::copy(squares, std::back_inserter(saved));  // 4, 16
+```
+
+`saved` 拥有结果，可独立于 `values` 存活。C++20 不提供 `std::ranges::to`、`std::views::zip` 或 `std::ranges::fold_left`，这些属于 C++23；累加仍可使用 `<numeric>` 中的 `std::accumulate`。
+
+### 10.2 投影：按成员排序和查找
+
+```cpp
+struct Student { std::string name; int score; };
+std::vector<Student> students{{"Alice", 88}, {"Bob", 95}, {"Carol", 72}};
+std::ranges::sort(students, std::ranges::greater{}, &Student::score);
+auto found = std::ranges::find(students, "Bob", &Student::name);
+if (found != students.end()) std::cout << found->score;
+```
+
+投影指定“比较哪个字段”，比较器指定“如何比较”。算法返回迭代器时，要考虑原范围的寿命；对非 borrowed range 的临时容器调用 `std::ranges::find` 会得到 `std::ranges::dangling`，不能解引用。完整程序见 [stl_algo_demo.cpp](./examples/stl_algo_demo.cpp)。
+
 ---
 
 ## 📝 练习题
@@ -555,7 +589,7 @@ void demo_ranges() {
 1. **STL 算法操作迭代器**：通用性强，适用于各种容器
 2. **常用算法**：`find`、`sort`、`transform`、`accumulate`
 3. **二分查找前提**：容器必须已排序
-4. **remove 不真正删除**：需要配合 `erase`
+4. **remove 不真正删除**：需要配合 `erase`；按条件删除容器元素优先使用 `std::erase_if`
 5. **优先使用 STL 算法**：比手写循环更安全、可读
 6. **C++20 Ranges**：更优雅的链式调用
 

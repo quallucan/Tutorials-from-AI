@@ -8,7 +8,7 @@
 - 曾学习过C++基础语法
 - 多年未编写C++代码
 - 缺乏完整项目开发经验
-- 希望学习现代C++（C++11/14/17/20）的开发者
+- 希望以 C++20 为基线学习现代 C++ 的开发者
 
 ### 学习目标
 1. 回顾并巩固C++核心语法
@@ -38,7 +38,9 @@ CPP_Resume/
 │       ├── pointer_demo.cpp
 │       ├── class_demo.cpp
 │       ├── template_demo.cpp
-│       └── stl_demo.cpp
+│       ├── stl_demo.cpp
+│       ├── modern_features_demo.cpp
+│       └── coroutine_demo.cpp
 │
 ├── 02_modern_paradigms/           # 第二章：现代编程范式
 │   ├── README.md                  # 章节导读
@@ -97,7 +99,7 @@ CPP_Resume/
 | 1.1 | 基础语法回顾 | 数据类型、变量、运算符、控制流、函数 | 2小时 |
 | 1.2 | 指针与引用 | 指针操作、引用、const修饰符、指针算术 | 2小时 |
 | 1.3 | 类与对象 | 类定义、构造/析构、继承、多态、虚函数 | 3小时 |
-| 1.4 | 模板基础 | 函数模板、类模板、模板特化 | 2小时 |
+| 1.4 | 模板基础 | 函数模板、类模板、Concepts 与 requires | 2小时 |
 | 1.5 | STL容器 | vector、map、set、unordered_map等 | 2小时 |
 | 1.6 | 现代C++新特性总览 | C++11/14/17/20 关键特性概述 | 1小时 |
 
@@ -114,9 +116,9 @@ CPP_Resume/
 | 2.3 | 移动语义与完美转发 | 右值引用、std::move、std::forward | 3小时 |
 | 2.4 | Lambda与函数式编程 | Lambda语法、捕获列表、高阶函数 | 2小时 |
 | 2.5 | 类型推断 | auto、decltype、decltype(auto) | 1.5小时 |
-| 2.6 | 编译期计算 | constexpr、if constexpr、编译期编程 | 2小时 |
-| 2.7 | 现代错误处理 | 异常、std::optional、std::expected | 2小时 |
-| 2.8 | 并发编程入门 | std::thread、mutex、future/promise | 3小时 |
+| 2.6 | 编译期计算 | constexpr、consteval、constinit、编译期容器 | 2小时 |
+| 2.7 | 现代错误处理 | 异常、std::optional、std::variant / Result | 2小时 |
+| 2.8 | 并发编程入门 | jthread、stop_token、同步工具、future/promise | 3小时 |
 
 ---
 
@@ -127,7 +129,7 @@ CPP_Resume/
 | 节号 | 标题 | 主要内容 | 预计时长 |
 |------|------|----------|----------|
 | 3.1 | 复杂度分析 | 时间/空间复杂度、大O表示法 | 1.5小时 |
-| 3.2 | STL算法库 | sort、find、transform、accumulate等 | 2小时 |
+| 3.2 | STL算法库 | 范围算法、views、投影及传统迭代器算法 | 2小时 |
 | 3.3 | 排序与查找 | 经典排序算法、二分查找 | 3小时 |
 | 3.4 | 递归与动态规划 | 递归思想、记忆化、DP基础 | 4小时 |
 | 3.5 | 常用数据结构 | 链表、栈、队列、树、图的实现 | 4小时 |
@@ -158,13 +160,15 @@ CPP_Resume/
 ## 🛠️ 技术要求
 
 ### 编译器要求
-- **推荐**：GCC 11+ 或 Clang 14+
-- **最低**：GCC 9 或 Clang 10（支持C++17）
-- 编译时使用 `-std=c++20`（或 `-std=c++17`）
+- **统一基线**：C++20；C++11/14/17 标签仅说明引入版本，C++23 仅作延伸阅读。
+- **建议工具链**：GCC 13+ / libstdc++ 13+、Clang 18+ / libstdc++ 13+（Linux），或 Visual Studio 2022 17.10+。
+- 编译时使用 `-std=c++20`，MSVC 使用 `/std:c++20 /utf-8 /Zc:__cplusplus`。
+- 标准库必须提供 `std::format`、Ranges、协程支持及 `std::jthread`。能力检查与官方支持表见[主 README](./README.md)。
+- CMake 设置标准为 20、要求该标准并禁用扩展，不提供旧标准回退。
 
 ### 开发环境建议
 - **编辑器**：VSCode + C/C++扩展 或 CLion
-- **构建工具**：CMake 3.16+
+- **构建工具**：CMake 3.21+
 - **调试器**：GDB 或 LLDB
 
 ### 示例代码编译方式
@@ -173,9 +177,9 @@ CPP_Resume/
 g++ -std=c++20 -Wall -Wextra -o output example.cpp
 
 # 使用CMake（推荐）
-mkdir build && cd build
-cmake ..
-make
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug
+cmake --build build --config Debug --parallel
+ctest --test-dir build -C Debug --output-on-failure
 ```
 
 ---
@@ -224,13 +228,16 @@ make
 
 ## 📝 备注
 
-- 所有示例代码均可独立编译运行
+- 所有 examples/*.cpp 均可按 C++20 独立编译运行，并纳入 CMake / CTest。
+- 文档片段会省略上下文；协程提供完整实现链接，模块为多文件语法介绍。
+- 项目与 solutions 目录为后续规划，当前仓库尚未提供。
 - 每个章节末尾提供练习题和思考题
 - 关键概念配有图解说明
 - 参考资料和延伸阅读链接
 
 ---
 
-*设计版本：v1.0*  
+*设计版本：v2.0（C++20 基线）*
+
 *创建日期：2025年12月13日*
 

@@ -130,7 +130,10 @@ constexpr std::string make_greeting() {
     s += "World!";
     return s;
 }
+static_assert(make_greeting().size() == 13);
 ```
+
+容器可以在常量求值过程中临时分配内存，但分配的存储必须在同一次常量求值结束前释放。不能把持有动态存储的非空 `std::vector` 直接保存为 `constexpr` 对象。上述函数返回后，临时字符串在求值结束前销毁；需要持久保存编译期序列时，使用 `std::array` 或字符串字面量。
 
 ### 2.4 constexpr 函数的规则
 
@@ -144,12 +147,13 @@ constexpr int allowed() {
     return x;
 }
 
-// 不允许的
+// C++20 中，不可在 constexpr 函数体中定义静态/线程局部变量；
+// I/O 和 throw 不能在常量求值实际执行的路径上出现。
 constexpr int not_allowed() {
     // static int x = 0;        // ❌ 静态变量
     // thread_local int y = 0;  // ❌ 线程局部
     // std::cout << "hi";       // ❌ I/O
-    // throw std::exception();  // ❌ C++20 之前不允许 try-catch
+    // throw 0;                // ❌ 常量求值不能执行 throw（与 try-catch 是不同规则）
     return 0;
 }
 ```
@@ -329,8 +333,10 @@ void modify() {
     global = 100;  // ✅ 可以修改
 }
 
-// 用途：避免静态初始化顺序问题
-// constinit 保证在程序启动时就已初始化
+// 仅适用于静态或线程存储期对象，排除需要动态初始化的初始化器。
+// 它既不表示 const，也不自动让变量可用于常量表达式。
+// constexpr int copy = global;  // ❌ global 是可变变量
+// static_assert(global == 42);  // ❌ 同样不能作为常量表达式
 
 // 对比
 constexpr int constant = 42;  // 编译期常量，不能修改
@@ -339,12 +345,28 @@ constexpr int constant = 42;  // 编译期常量，不能修改
 
 ### 5.3 对比三者
 
-| 关键字 | 编译期初始化 | 编译期可用 | 运行时可修改 | 运行时可调用 |
-|--------|-------------|-----------|-------------|-------------|
-| `const` | 可能 | 可能 | ❌ | - |
-| `constexpr` | ✅ 必须 | ✅ | ❌ | ✅ 可以 |
-| `consteval` | ✅ 必须 | ✅ | - | ❌ 必须编译期 |
-| `constinit` | ✅ 必须 | ✅ | ✅ | - |
+| 声明形式 | 主要含义 | 能否在运行时使用 |
+|----------|----------|------------------|
+| `const` 变量 | 不可修改，初始化可在运行时发生 | 可以读取；不一定可用于常量表达式 |
+| `constexpr` 变量 | 必须常量初始化，并且是 const | 可以读取 |
+| `constexpr` 函数 | 允许常量求值，是否在编译期求值取决于调用上下文 | 可以调用 |
+| `consteval` 函数 | 立即函数，通常的调用必须产生常量表达式 | 不能接受运行期输入进行调用 |
+| `constinit` 变量 | 静态/线程存储期对象必须常量初始化，不隐含 const | 未另加 const 时可以修改 |
+
+### 5.4 std::is_constant_evaluated
+
+```cpp
+#include <type_traits>
+
+constexpr int evaluation_mode() {
+    if (std::is_constant_evaluated()) return 1;
+    return 2;
+}
+static_assert(evaluation_mode() == 1);
+// std::cout << evaluation_mode();  // 运行时调用，输出 2
+```
+
+这里要用普通 `if`；写成 `if constexpr (std::is_constant_evaluated())` 会让条件本身处于常量求值中，无法区分运行时调用。完整示例见 [constexpr_demo.cpp](./examples/constexpr_demo.cpp)。
 
 ---
 
@@ -544,8 +566,7 @@ int fn = factorial(n);
 constexpr int result = some_constexpr_function();
 static_assert(result == expected, "Unexpected result!");
 
-// 编译期打印（C++20 consteval + C++23）
-// 暂时不支持直接打印
+// C++20 常量求值不能执行标准 I/O；用 static_assert 检查结果
 
 // 拆分成小函数，逐步验证
 constexpr int step1 = process_step1(input);

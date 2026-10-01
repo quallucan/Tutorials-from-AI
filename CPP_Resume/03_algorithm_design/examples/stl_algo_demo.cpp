@@ -7,6 +7,9 @@
  */
 
 #include <iostream>
+#include <cassert>
+#include <iterator>
+#include <ranges>
 #include <vector>
 #include <algorithm>
 #include <numeric>
@@ -105,14 +108,11 @@ void demo_modifying() {
     std::replace(v3.begin(), v3.end(), 2, 99);
     print("replace(2->99)", v3);
     
-    // remove + erase（erase-remove 惯用法）
+    // C++20：直接删除满足条件的元素
     std::vector<int> v4 = {1, 2, 3, 4, 5, 6};
     print("删除前", v4);
-    v4.erase(
-        std::remove_if(v4.begin(), v4.end(), [](int x) { return x % 2 == 0; }),
-        v4.end()
-    );
-    print("remove_if(偶数)", v4);
+    std::erase_if(v4, [](int x) { return x % 2 == 0; });
+    print("erase_if(偶数)", v4);
     
     // reverse
     std::reverse(v4.begin(), v4.end());
@@ -311,6 +311,36 @@ void demo_heap() {
 }
 
 //==============================================================================
+// 9. C++20 Ranges：惰性视图、范围算法与投影
+//==============================================================================
+
+void demo_ranges() {
+    std::cout << "\n===== C++20 Ranges =====\n";
+    std::vector<int> values{1, 2, 3, 4, 5, 6, 7, 8};
+    auto squares = values
+        | std::views::filter([](int x) { return x % 2 == 0; })
+        | std::views::transform([](int x) { return x * x; })
+        | std::views::take(3);
+
+    // C++20 用 copy 实体化；std::ranges::to 属于 C++23。
+    std::vector<int> result;
+    std::ranges::copy(squares, std::back_inserter(result));
+    assert((result == std::vector{4, 16, 36}));
+    print("前 3 个偶数的平方", result);
+
+    struct Student { std::string name; int score; };
+    std::vector<Student> students{{"Alice", 88}, {"Bob", 95}, {"Carol", 72}};
+    std::ranges::sort(students, std::ranges::greater{}, &Student::score);
+    const auto found = std::ranges::find(students, "Bob", &Student::name);
+    assert(found != students.end() && found->score == 95);
+    assert(students.front().name == "Bob");
+    for (const auto& student : students) {
+        std::cout << student.name << ": " << student.score << '\n';
+    }
+    // squares 借用了 values；使用视图期间保持原容器有效。
+}
+
+//==============================================================================
 // 主函数
 //==============================================================================
 
@@ -325,6 +355,7 @@ int main() {
     demo_minmax();
     demo_set_operations();
     demo_heap();
+    demo_ranges();
     
     std::cout << "\n===== 完成 =====" << std::endl;
     return 0;

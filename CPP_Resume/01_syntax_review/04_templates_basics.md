@@ -497,8 +497,11 @@ triple_value(T x) {
 
 ### 7.2 C++20 Concepts
 
+本教程的新接口优先用 Concepts 表达模板约束；上一节的 SFINAE 用于理解已有代码。约束决定某个重载是否可用，`if constexpr` 则负责在模板内部选择实现路径，两者用途不同。
+
 ```cpp
 #include <concepts>
+#include <type_traits>
 
 // 定义概念
 template<typename T>
@@ -528,10 +531,15 @@ auto add3(Numeric auto a, Numeric auto b) {
 }
 ```
 
+`template<Numeric T> T add(T, T)` 要求两个实参推导出同一个 T；`add3(Numeric auto a, Numeric auto b)` 的两个占位参数独立推导，可以接受 `int` 与 `double`。Concepts 检查表达式是否合法，不验证运行时的数值范围或除数是否为零。
+
+完整示例见 [template_demo.cpp](./examples/template_demo.cpp)，Concepts 代码直接按 C++20 编译，不设旧标准回退分支。
+
 ### 7.3 标准库 Concepts（C++20）
 
 ```cpp
 #include <concepts>
+#include <type_traits>
 
 // 常用标准概念
 template<std::integral T>

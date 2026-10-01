@@ -6,6 +6,8 @@
 
 我们将从 RAII（资源获取即初始化）这一 C++ 最重要的设计原则开始，逐步深入到智能指针、移动语义、Lambda 表达式等核心特性，最后介绍并发编程的基础。
 
+所有示例采用 **C++20**。模板 Lambda、`consteval`、`constinit`、`std::jthread` 与协作式停止都属于本章实践内容；携带错误信息使用 `std::variant` 构建 Result。
+
 ## 🎯 学习目标
 
 完成本章学习后，你将能够：
@@ -15,9 +17,9 @@
 - ✅ 理解移动语义，编写高效的资源管理代码
 - ✅ 使用 Lambda 表达式进行函数式编程
 - ✅ 掌握 `auto`、`decltype` 等类型推断机制
-- ✅ 使用 `constexpr` 进行编译期计算
-- ✅ 采用现代方式处理错误（异常、optional、expected）
-- ✅ 了解 C++ 并发编程的基础
+- ✅ 使用 `constexpr`、`consteval` 和 `constinit` 区分编译期计算与初始化
+- ✅ 采用现代方式处理错误（异常、optional、基于 variant 的 Result）
+- ✅ 使用 `std::jthread`、`std::stop_token` 和 C++20 同步工具
 
 ## 📚 章节目录
 
@@ -28,9 +30,9 @@
 | 2.3 | [移动语义与完美转发](./03_move_semantics.md) | 右值引用、std::move、std::forward | 3小时 |
 | 2.4 | [Lambda与函数式编程](./04_lambda_functional.md) | Lambda语法、捕获、高阶函数 | 2小时 |
 | 2.5 | [类型推断](./05_type_deduction.md) | auto、decltype、decltype(auto) | 1.5小时 |
-| 2.6 | [编译期计算](./06_constexpr_compile.md) | constexpr、if constexpr、编译期编程 | 2小时 |
-| 2.7 | [现代错误处理](./07_error_handling.md) | 异常、std::optional、std::expected | 2小时 |
-| 2.8 | [并发编程入门](./08_concurrency_intro.md) | std::thread、mutex、future/promise | 3小时 |
+| 2.6 | [编译期计算](./06_constexpr_compile.md) | constexpr、consteval、constinit、编译期容器 | 2小时 |
+| 2.7 | [现代错误处理](./07_error_handling.md) | 异常、std::optional、std::variant / Result | 2小时 |
+| 2.8 | [并发编程入门](./08_concurrency_intro.md) | jthread、stop_token、同步工具、future/promise | 3小时 |
 
 ## 💻 示例代码
 
@@ -55,7 +57,7 @@ examples/
 cd examples
 
 # 编译（使用 C++20 标准）
-g++ -std=c++20 -Wall -o raii_demo raii_demo.cpp
+g++ -std=c++20 -Wall -pthread -o raii_demo raii_demo.cpp
 
 # 并发示例需要链接 pthread
 g++ -std=c++20 -Wall -pthread -o thread_demo thread_demo.cpp

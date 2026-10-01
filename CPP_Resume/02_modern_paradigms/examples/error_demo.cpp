@@ -7,6 +7,7 @@
  */
 
 #include <iostream>
+#include <climits>
 #include <optional>
 #include <variant>
 #include <stdexcept>
@@ -171,7 +172,7 @@ void demo_optional_advanced() {
 }
 
 // ============================================================
-// 6. 使用 variant 模拟 expected (C++17)
+// 6. C++20 错误处理：用 variant 表示值或错误（variant 自 C++17 引入）
 // ============================================================
 
 enum class ParseError {

@@ -10,6 +10,8 @@
 - 解决常见的编程问题
 - 为深入学习算法打下基础
 
+本章统一使用 **C++20**。保留迭代器形式以解释传统 STL 算法，同时在 [STL 算法库](./02_stl_algorithms.md)及 `examples/stl_algo_demo.cpp` 中实践 Ranges、惰性视图、投影和 `std::erase_if`。
+
 ## 🎯 学习目标
 
 完成本章学习后，你将能够：

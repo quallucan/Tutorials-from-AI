@@ -6,6 +6,8 @@
 
 我们会从最基础的语法开始，逐步深入到类、模板和STL，最后给出现代C++新特性的总览，为后续章节打下基础。
 
+本章以 **C++20** 为统一基线。旧标准标签表示引入版本，Concepts、`contains` 和 `erase_if` 均直接使用。环境与完整构建步骤见[主 README](../README.md)。
+
 ## 🎯 学习目标
 
 完成本章学习后，你将能够：
@@ -15,7 +17,7 @@
 - ✅ 编写类并理解面向对象编程的基本概念
 - ✅ 理解模板的基本用法
 - ✅ 使用STL常用容器
-- ✅ 了解C++11/14/17/20的主要新特性
+- ✅ 使用 C++20 Concepts、`std::span`、三路比较和 `std::format`，了解协程与模块
 
 ## 📚 章节目录
 
@@ -38,7 +40,9 @@ examples/
 ├── pointer_demo.cpp      # 指针与引用示例
 ├── class_demo.cpp        # 类与对象示例
 ├── template_demo.cpp     # 模板示例
-└── stl_demo.cpp          # STL容器示例
+├── stl_demo.cpp          # STL容器示例，包含 contains / erase_if
+├── modern_features_demo.cpp # C++20 span、比较、format 等
+└── coroutine_demo.cpp    # C++20 自定义协程生成器
 ```
 
 ### 编译运行示例
@@ -47,7 +51,7 @@ examples/
 # 进入示例目录
 cd examples
 
-# 编译（使用C++17或C++20标准）
+# 编译（统一使用 C++20 标准）
 g++ -std=c++20 -Wall -o basic_demo basic_demo.cpp
 
 # 运行

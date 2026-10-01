@@ -173,22 +173,24 @@ public:
     }
     
     auto get_lambda_v2() {
-        // C++14：捕获 *this（拷贝整个对象）
+        // C++17：捕获 *this（拷贝整个对象）
         return [*this]() { return value_; };
     }
     
     auto get_lambda_v3() {
-        // C++17：[=, this] 明确捕获 this
+        // C++20：[=, this] 明确捕获 this
         return [=, this]() { return value_; };
     }
 };
 
 void demo() {
-    auto lambda = [w = Widget()]() {
+    auto lambda = [w = Widget()]() mutable {
         return w.get_lambda_v1()();
     };
 }
 ```
+
+C++20 已弃用 `[=]` 对 `this` 的隐式捕获。需要对象指针时写 `[this]` 或 `[=, this]`，需要对象副本时写 `[*this]`；捕获指针不会延长对象生命周期。
 
 ### 2.6 捕获列表总结
 
@@ -556,7 +558,7 @@ auto factorial2 = [](auto&& self, int n) -> int {
 };
 // 调用：factorial2(factorial2, 5)
 
-// 方法3：C++23 deducing this（最优雅）
+// 延伸阅读：C++23 显式对象参数，不属于本教程 C++20 基线
 // auto factorial3 = [](this auto&& self, int n) -> int {
 //     return n <= 1 ? 1 : n * self(n - 1);
 // };

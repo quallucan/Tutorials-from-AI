@@ -375,21 +375,11 @@ void demo_scope_guard() {
 }  // 离开作用域，guard 执行清理
 ```
 
-### 5.3 C++20/23 的 scope_exit（提案）
+### 5.3 C++20 的作用域清理选择
 
-```cpp
-// 未来可能的标准库支持
-// #include <scope>
+C++20 标准库没有 `std::scope_exit`，也没有标准头文件 `<scope>`。优先使用 `std::unique_ptr` 的自定义删除器、文件流、锁等已有 RAII 类型；一般回调可以使用上节的 ScopeGuard，清理回调必须保证不抛出异常。
 
-void demo_scope_exit() {
-    FILE* file = fopen("data.txt", "r");
-    
-    // C++23 提案
-    // std::scope_exit guard([&] { if (file) fclose(file); });
-    
-    // 处理...
-}
-```
+`std::experimental::scope_exit` 属于 Library Fundamentals TS v3，见 [WG21 文档](https://www.open-std.org/jtc1/sc22/wg21/docs/papers/2022/n4920)。TS 扩展不是 C++20 或 C++23 的标准库保证，本教程不依赖 `<experimental/scope>`。
 
 ---
 

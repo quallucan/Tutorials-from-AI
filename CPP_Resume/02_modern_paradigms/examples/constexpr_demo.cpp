@@ -9,6 +9,10 @@
 #include <iostream>
 #include <array>
 #include <string_view>
+#include <algorithm>
+#include <string>
+#include <type_traits>
+#include <vector>
 
 // ============================================================
 // 1. constexpr 变量
@@ -309,7 +313,7 @@ void demo_static_assert() {
     
     // 编译期检查
     static_assert(sizeof(int) >= 4, "int 必须至少 4 字节");
-    static_assert(sizeof(void*) == 8, "需要 64 位平台");
+    static_assert(sizeof(char) == 1, "char 的大小按定义为 1 字节");
     
     OnlyArithmetic<int> a(42);
     OnlyArithmetic<double> b(3.14);
@@ -318,6 +322,41 @@ void demo_static_assert() {
     std::cout << "a.value = " << a.value << "\n";
     std::cout << "b.value = " << b.value << "\n";
     std::cout << "static_assert 检查通过\n";
+}
+
+// ============================================================
+// 9. C++20：立即函数、常量初始化和编译期容器
+// ============================================================
+
+consteval int square_immediate(int value) {
+    return value * value;
+}
+
+// 必须常量初始化，但不是只读变量；只能用于静态或线程存储期变量。
+constinit int request_count = square_immediate(3);
+
+constexpr int sorted_minimum() {
+    std::vector<int> values{5, 3, 8, 1};
+    std::ranges::sort(values);
+    return values.front();
+}  // vector 的动态存储必须在本次常量求值结束前释放
+
+constexpr int evaluation_mode() {
+    // 普通 if 才能区分这一次调用的求值环境；不要写 if constexpr。
+    if (std::is_constant_evaluated()) return 1;
+    return 2;
+}
+
+void demo_cpp20_constexpr() {
+    std::cout << "\n=== C++20 编译期计算 ===\n";
+    constexpr int square = square_immediate(6);
+    static_assert(square == 36);
+    static_assert(sorted_minimum() == 1);
+    static_assert(evaluation_mode() == 1);
+    ++request_count;
+    std::cout << "consteval square(6) = " << square << '\n';
+    std::cout << "constinit 变量修改后 = " << request_count << '\n';
+    std::cout << "运行时求值标记 = " << evaluation_mode() << '\n';
 }
 
 // ============================================================
@@ -337,6 +376,7 @@ int main() {
     demo_constexpr_strings();
     demo_lookup_table();
     demo_static_assert();
+    demo_cpp20_constexpr();
     
     std::cout << "\n========================================\n";
     std::cout << "            示例结束\n";
